@@ -35,6 +35,7 @@ const Lottery = mongoose.model('Lottery', lotterySchema);
 const orderSchema = new mongoose.Schema({
     order_id: { type: Number, unique: true },
     user_id: { type: Number, ref: 'User' },  
+    lotto_id: { type: Number, ref: 'Lottery' }, 
     status: { type: Number, default: 1 },
     no: Number
 });
@@ -273,8 +274,9 @@ app.put("/updatewallet", async (req, res) => {
 //เรียกเอาล็อตโตทั้งหมดจาก user_id
 app.get("/mylotto/:id", async (req, res) => {
     console.log("Body: ", req.body);
-    
-    const user_id = req.params.id;
+
+    const user_id = Number(req.params.id);
+
 
     try {
         const results = await Order.aggregate([

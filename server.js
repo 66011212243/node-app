@@ -273,7 +273,7 @@ app.put("/updatewallet", async (req, res) => {
 //เรียกเอาล็อตโตทั้งหมดจาก user_id
 app.get("/mylotto/:id", async (req, res) => {
     console.log("Body: ", req.body);
-
+    
     const user_id = req.params.id;
 
     try {

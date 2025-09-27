@@ -277,7 +277,6 @@ app.get("/mylotto/:id", async (req, res) => {
 
     const user_id = Number(req.params.id);
 
-
     try {
         const results = await Order.aggregate([
             {
@@ -288,7 +287,7 @@ app.get("/mylotto/:id", async (req, res) => {
             },
             {
                 $lookup: {
-                    from: "lotteries",        // ชื่อ collection ของ Lottery
+                    from: "lotteries",        
                     localField: "lotto_id",
                     foreignField: "lotto_id",
                     as: "lottery_data"
@@ -297,10 +296,23 @@ app.get("/mylotto/:id", async (req, res) => {
             { $unwind: "$lottery_data" },
             {
                 $addFields: {
-                    last_three_digits: { $substr: ["$lottery_data.number", -3, 3] }
+                    last_three_digits: {
+                        $cond: [
+                            { $gte: [ { $strLenCP: "$lottery_data.number" }, 3 ] },
+                            {
+                                $substrCP: [
+                                    "$lottery_data.number",
+                                    { $subtract: [ { $strLenCP: "$lottery_data.number" }, 3 ] },
+                                    3
+                                ]
+                            },
+                            "$lottery_data.number"
+                        ]
+                    }
                 }
             }
         ]);
+
         console.log("Results:", results);
         res.status(200).json(results);
     } catch (error) {
@@ -308,6 +320,7 @@ app.get("/mylotto/:id", async (req, res) => {
         return res.status(500).send();
     }
 });
+
 
 
 

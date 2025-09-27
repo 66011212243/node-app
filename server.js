@@ -1,60 +1,95 @@
-const express = require('express')
-const mysql = require('mysql2');
-const bcrypt = require("bcryptjs");
 require('dotenv').config();
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const mongoose = require('mongoose');
+
 const app = express();
 app.use(express.json());
 
-
 const PORT = process.env.PORT || 3000;
 
-const connection = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
-})
+//------------------ MONGODB CONNECTION ------------------//
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log("MongoDB connected successfully!"))
+    .catch(err => console.error("MongoDB connection error:", err));
 
+//------------------ SCHEMAS ------------------//
+const userSchema = new mongoose.Schema({
+    user_id: { type: Number, unique: true },
+    email: { type: String, required: true, unique: true },
+    name: String,
+    password: String,
+    wallet: { type: Number, default: 0 },
+    status: { type: Number, default: 0 }
+}, { timestamps: true });
+const User = mongoose.model('User', userSchema);
 
-connection.connect((err) => {
-    if (err) {
-        console.log('Error connecting to MySQL database = ', err)
-        return;
-    }
-    console.log('MySQL successfully connected!');
-})
+const lotterySchema = new mongoose.Schema({
+    number: { type: String, required: true },
+    price: Number,
+    status: { type: Number, default: 1 }
+}, { timestamps: true });
+const Lottery = mongoose.model('Lottery', lotterySchema);
 
-/*------------------- user -------------------*/
+const orderSchema = new mongoose.Schema({
+    user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    lotto_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Lottery' },
+    status: { type: Number, default: 1 },
+    no: Number
+}, { timestamps: true });
+const Order = mongoose.model('Order', orderSchema);
+
+const rewardSchema = new mongoose.Schema({
+    no: Number,
+    lotto_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Lottery' },
+    number_reward: String,
+    price_reward: Number
+}, { timestamps: true });
+const Reward = mongoose.model('Reward', rewardSchema);
+
+//------------------ ROUTES ------------------//
+
+// Test server
+app.get('/', (req, res) => {
+    res.send('Hello, world! Server is running!');
+});
+
+const counterSchema = new mongoose.Schema({
+  name: { type: String, required: true, unique: true },
+  seq: { type: Number, default: 0 }
+});
+
+const Counter = mongoose.model("Counter", counterSchema);
+
+async function getNextUserId() {
+  const counter = await Counter.findOneAndUpdate(
+    { name: "user_id" },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  return counter.seq;
+}
+
 
 // create user
-app.post("/create", async  (req, res) => {
-    console.log(" POST /create called");
-    console.log("Body:", req.body);
-
-    const { email, name, password, wallet } = req.body; //ดึงค่า
-    const saltRounds = 10;  //จำนวนรอบในการ hash
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+app.post("/create", async (req, res) => {
+    const { email, name, password, wallet } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     try {
-        connection.query(
-            "INSERT INTO users(email, name, password, wallet) VALUES(?, ?, ?, ?)",
-            [email, name, hashedPassword, wallet],
-            (err, results, fields) => {
-                if (err) {
-                    console.log("Error while inserting a user into the database", err);
-                    return res.status(400).send();
-                }
-                return res.status(201).json({ message: "New user successfully created!"});
-            }
-        )
+        const newUserId = await getNextUserId(); // ได้ user_id เป็นเลข
+        const user = new User({ user_id: newUserId, email, name, password: hashedPassword, wallet });
+        await user.save();
+        res.status(201).json({ message: "New user successfully created!" });
     } catch(err) {
-        console.log(err);
-        return res.status(500).send();
+        console.error(err);
+        res.status(400).json({ error: err.message });
     }
-})
+});
+
 
 //user login
-app.post("/users/login", (req, res) => {
+app.post("/users/login", async (req, res) => {
   const { email, password } = req.body;
 
   // ตรวจสอบว่ามีค่า email/password หรือไม่
@@ -62,40 +97,37 @@ app.post("/users/login", (req, res) => {
     return res.status(400).json({ success: false, message: "Email and password are required" });
   }
 
-  // query database
-  const sql = "SELECT * FROM users WHERE email = ? LIMIT 1";
-  connection.query(sql, [email], async (err, results) => {
-    if (err) {
-      console.error("Error querying MySQL:", err);
-      return res.status(500).json({ success: false, message: "Database error" });
-    }
+  try {
+    // ค้นหา user ใน MongoDB
+    const user = await User.findOne({ email });
 
-    if (results.length === 0) {
+    if (!user) {
       return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
-    const user = results[0];
-
-    //  ตรวจสอบ password ที่กรอก กับ hash ที่อยู่ใน DB
+    // ตรวจสอบ password
     const isMatch = await bcrypt.compare(password, user.password);
-
     if (!isMatch) {
       return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
-    // ส่ง response กลับ Flutter
+    // ส่ง response กลับ Flutter เหมือนเดิม
     res.json({
       users: {
-        user_id: user.user_id,        
-        email: user.email, 
-        name: user.name, 
+        user_id: user.user_id, // MongoDB ใช้ _id แทน user_id
+        email: user.email,
+        name: user.name,
         password: user.password,
         wallet: user.wallet,
         status: user.status,
       },
     });
-  });
+  } catch (err) {
+    console.error("Error querying MongoDB:", err);
+    res.status(500).json({ success: false, message: "Database error" });
+  }
 });
+
 
 // เอาเลขล็อตโตทั้งหมดมาแสดง
 app.get("/lottery", (req, res) => {
@@ -597,11 +629,5 @@ app.delete("/delete", (req, res) => {
 });
 
 
-
-
-
-
-
-
-
+// START SERVER
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));

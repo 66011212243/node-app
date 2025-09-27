@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema({
     password: String,
     wallet: { type: Number, default: 0 },
     status: { type: Number, default: 0 }
-}, { timestamps: true });
+});
 const User = mongoose.model('User', userSchema);
 
 const lotterySchema = new mongoose.Schema({
@@ -29,7 +29,7 @@ const lotterySchema = new mongoose.Schema({
     number: { type: String, required: true },
     price: Number,
     status: { type: Number, default: 0 }
-}, { timestamps: true });
+});
 const Lottery = mongoose.model('Lottery', lotterySchema);
 
 const orderSchema = new mongoose.Schema({
@@ -37,7 +37,7 @@ const orderSchema = new mongoose.Schema({
     user_id: { type: Number, ref: 'User' },  
     status: { type: Number, default: 1 },
     no: Number
-}, { timestamps: true });
+});
 const Order = mongoose.model('Order', orderSchema);
 
 const rewardSchema = new mongoose.Schema({
@@ -45,7 +45,7 @@ const rewardSchema = new mongoose.Schema({
     lotto_id: { type: Number, ref: 'Lottery' }, 
     number_reward: String,
     price_reward: Number
-}, { timestamps: true });
+});
 const Reward = mongoose.model('Reward', rewardSchema);
 
 
@@ -137,13 +137,12 @@ app.get("/users", async (req, res) => {
 app.post("/users/login", async (req, res) => {
   const { email, password } = req.body;
 
-  // ตรวจสอบว่ามีค่า email/password หรือไม่
+
   if (!email || !password) {
     return res.status(400).json({ success: false, message: "Email and password are required" });
   }
 
   try {
-    // ค้นหา user ใน MongoDB
     const user = await User.findOne({ email });
 
     if (!user) {
@@ -159,7 +158,7 @@ app.post("/users/login", async (req, res) => {
     // ส่ง response กลับ Flutter เหมือนเดิม
     res.json({
       users: {
-        user_id: user.user_id, // MongoDB ใช้ _id แทน user_id
+        user_id: user.user_id, 
         email: user.email,
         name: user.name,
         password: user.password,
@@ -316,7 +315,10 @@ app.get("/profile/:id", async (req, res) => {
   const user_id = req.params.id;
 
   try {
-    const user = await User.findOne({ user_id: Number(user_id) }).lean();
+    const user = await User.findOne(
+      { user_id: user_id },
+      { _id: 0, __v: 0 } // ลบ _id และ __v
+    ).lean();
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });

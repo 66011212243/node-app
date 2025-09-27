@@ -355,20 +355,44 @@ app.get("/myreward", async (req, res) => {
 
       {
         $lookup: {
-          from: "rewards",          
-          localField: "lotto_id",   
-          foreignField: "lotto_id", 
+          from: "rewards",
+          localField: "lotto_id",
+          foreignField: "lotto_id",
           as: "reward_data"
         }
       },
-      { $unwind: "$reward_data" }, // ทำให้ join เป็น object เดียว
+      { $unwind: "$reward_data" },
 
       { $match: { "reward_data.no": { $in: [1, 2, 3] } } },
 
-      // สร้าง last_three_digits, last_two_digits
       {
         $addFields: {
-          last_three_digits: { $substr: ["$reward_data.number_reward", -3, 3] },
+          last_three_digits: {
+            $cond: [
+              { $gte: [{ $strLenCP: "$reward_data.number_reward" }, 3] },
+              {
+                $substrCP: [
+                  "$reward_data.number_reward",
+                  { $subtract: [{ $strLenCP: "$reward_data.number_reward" }, 3] },
+                  3
+                ]
+              },
+              "$reward_data.number_reward"
+            ]
+          },
+          last_two_digits: {
+            $cond: [
+              { $gte: [{ $strLenCP: "$reward_data.number_reward" }, 2] },
+              {
+                $substrCP: [
+                  "$reward_data.number_reward",
+                  { $subtract: [{ $strLenCP: "$reward_data.number_reward" }, 2] },
+                  2
+                ]
+              },
+              "$reward_data.number_reward"
+            ]
+          }
         }
       }
     ]);
@@ -381,13 +405,14 @@ app.get("/myreward", async (req, res) => {
 });
 
 
+
 //////////////////////////////////////////////////////////////////////
 
 //เอาไว้ดึงค่ารางวัลที่ user_id คนนั้นถูก  (myreward_get_res)
 
 
 app.get("/getMyreward/:user_id", async (req, res) => {
-    const userId = req.params.user_id;
+    const userId = Number(req.params.user_id);
 
     try {
         const results = await Order.aggregate([
@@ -396,7 +421,7 @@ app.get("/getMyreward/:user_id", async (req, res) => {
             },
             {
                 $lookup: {
-                    from: "rewards",        // ต้องตรงกับชื่อ collection ใน MongoDB (เป็นพหูพจน์)
+                    from: "rewards",
                     localField: "no",
                     foreignField: "no",
                     as: "rewardData"
@@ -405,7 +430,19 @@ app.get("/getMyreward/:user_id", async (req, res) => {
             { $unwind: "$rewardData" },
             {
                 $addFields: {
-                    lastThree: { $substr: ["$rewardData.number_reward", -3, 3] }
+                    lastThree: {
+                        $cond: [
+                            { $gte: [{ $strLenCP: "$rewardData.number_reward" }, 3] },
+                            {
+                                $substrCP: [
+                                    "$rewardData.number_reward",
+                                    { $subtract: [{ $strLenCP: "$rewardData.number_reward" }, 3] },
+                                    3
+                                ]
+                            },
+                            "$rewardData.number_reward"
+                        ]
+                    }
                 }
             },
             {
@@ -431,6 +468,7 @@ app.get("/getMyreward/:user_id", async (req, res) => {
 
 
 
+
 // SELECT เอาเลขท้ายสองตัวมาจาก ordersทั้งหมด
 
 app.get("/LastTwoDigitOrder/:id", async (req, res) => {
@@ -438,12 +476,10 @@ app.get("/LastTwoDigitOrder/:id", async (req, res) => {
 
     try {
         const results = await Order.aggregate([
-            {
-                $match: { user_id: user_id, status: 1 }
-            },
+            { $match: { user_id: user_id, status: 1 } },
             {
                 $lookup: {
-                    from: "lotteries",        // ต้องตรงกับชื่อ collection
+                    from: "lotteries",
                     localField: "lotto_id",
                     foreignField: "lotto_id",
                     as: "lotteryData"
@@ -452,7 +488,19 @@ app.get("/LastTwoDigitOrder/:id", async (req, res) => {
             { $unwind: "$lotteryData" },
             {
                 $addFields: {
-                    last_two_digits: { $substr: ["$lotteryData.number", -2, 2] }
+                    last_two_digits: {
+                        $cond: [
+                            { $gte: [{ $strLenCP: "$lotteryData.number" }, 2] },
+                            {
+                                $substrCP: [
+                                    "$lotteryData.number",
+                                    { $subtract: [{ $strLenCP: "$lotteryData.number" }, 2] },
+                                    2
+                                ]
+                            },
+                            "$lotteryData.number"
+                        ]
+                    }
                 }
             },
             {
@@ -472,18 +520,29 @@ app.get("/LastTwoDigitOrder/:id", async (req, res) => {
 });
 
 
+
 // SELECT เอาเลขสองตัวท้ายของ no = 5 จาก reward
 app.get("/getLastTwoDigit", async (req, res) => {
     console.log("Body:", req.body);
 
     try {
         const results = await Reward.aggregate([
-            {
-                $match: { no: 5 }  // กรองเฉพาะ no = 5
-            },
+            { $match: { no: 5 } },  // กรองเฉพาะ no = 5
             {
                 $addFields: {
-                    last_two_digits: { $substr: ["$number_reward", -2, 2] }
+                    last_two_digits: {
+                        $cond: [
+                            { $gte: [{ $strLenCP: "$number_reward" }, 2] },
+                            {
+                                $substrCP: [
+                                    "$number_reward",
+                                    { $subtract: [{ $strLenCP: "$number_reward" }, 2] },
+                                    2
+                                ]
+                            },
+                            "$number_reward" // ถ้า string < 2 ใช้เต็ม ๆ
+                        ]
+                    }
                 }
             },
             {
@@ -501,6 +560,7 @@ app.get("/getLastTwoDigit", async (req, res) => {
         return res.status(500).send();
     }
 });
+
 
 
 //ถ้ารางวัลตรงกันจะมีการอัปเดต ststus = 2

@@ -403,6 +403,20 @@ app.get("/myreward", async (req, res) => {
             ]
           }
         }
+      },
+      // Project fields ให้ตรงกับ Flutter model NumberReward
+      {
+        $project: {
+          orderId: "$order_id",
+          userId: "$user_id",
+          lottoId: "$lotto_id",
+          status: 1,
+          no: "$reward_data.no",
+          numberReward: "$reward_data.number_reward",
+          priceReward: "$reward_data.price_reward",
+          lastThreeDigits: "$last_three_digits",
+          lastTwoDigits: "$last_two_digits"
+        }
       }
     ]);
 
@@ -412,6 +426,7 @@ app.get("/myreward", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 

@@ -299,7 +299,7 @@ app.get("/mylotto/:id", async (req, res) => {
                 }
             }
         ]);
-
+        console.log("Results:", results);
         res.status(200).json(results);
     } catch (error) {
         console.log(error);

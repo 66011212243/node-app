@@ -49,9 +49,9 @@ const rewardSchema = new mongoose.Schema({
 const Reward = mongoose.model('Reward', rewardSchema);
 
 
-const Order = require("./models/Order");
-const Reward = require("./models/Reward");
-const Lottery = require("./models/Lottery");
+// const Order = require("./models/Order");
+// const Reward = require("./models/Reward");
+// const Lottery = require("./models/Lottery");
 
 //------------------ ROUTES ------------------//
 

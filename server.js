@@ -51,7 +51,7 @@ const Reward = mongoose.model('Reward', rewardSchema);
 
 // Test server
 app.get('/', (req, res) => {
-    res.send('Hello, world! Server is running!');
+    res.send('Hello, world! Render is running!');
 });
 
 const counterSchema = new mongoose.Schema({
@@ -84,6 +84,21 @@ app.post("/create", async (req, res) => {
     } catch(err) {
         console.error(err);
         res.status(400).json({ error: err.message });
+    }
+});
+
+// GET: แสดงผู้ใช้ทั้งหมด
+app.get("/users", async (req, res) => {
+    try {
+        // ดึงข้อมูลทั้งหมดจาก collection 'users'
+        const users = await User.find({}, { _id: 0, __v: 0 }); 
+        // _id: 0 คือไม่เอา _id
+        // __v: 0 คือไม่เอา version key ของ Mongoose
+
+        res.status(200).json(users);
+    } catch (err) {
+        console.error("Error fetching users:", err);
+        res.status(500).json({ message: "Error fetching users" });
     }
 });
 

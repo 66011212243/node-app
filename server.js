@@ -274,7 +274,7 @@ app.put("/updatewallet", async (req, res) => {
 app.get("/mylotto/:id", async (req, res) => {
     console.log("Body: ", req.body);
 
-    const user_id = Number(req.params.id);
+    const user_id = req.params.id;
 
     try {
         const results = await Order.aggregate([

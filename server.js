@@ -25,15 +25,16 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 const lotterySchema = new mongoose.Schema({
+    lotto_id: { type: Number, unique: true },
     number: { type: String, required: true },
     price: Number,
-    status: { type: Number, default: 1 }
+    status: { type: Number, default: 0 }
 }, { timestamps: true });
 const Lottery = mongoose.model('Lottery', lotterySchema);
 
 const orderSchema = new mongoose.Schema({
-    user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    lotto_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Lottery' },
+    order_id: { type: Number, unique: true },
+    user_id: { type: Number, ref: 'User' },  
     status: { type: Number, default: 1 },
     no: Number
 }, { timestamps: true });
@@ -41,18 +42,19 @@ const Order = mongoose.model('Order', orderSchema);
 
 const rewardSchema = new mongoose.Schema({
     no: Number,
-    lotto_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Lottery' },
+    lotto_id: { type: Number, ref: 'Lottery' }, 
     number_reward: String,
     price_reward: Number
 }, { timestamps: true });
 const Reward = mongoose.model('Reward', rewardSchema);
 
+
+const Order = require("./models/Order");
+const Reward = require("./models/Reward");
+const Lottery = require("./models/Lottery");
+
 //------------------ ROUTES ------------------//
 
-// Test server
-app.get('/', (req, res) => {
-    res.send('Hello, world! Render is running!');
-});
 
 const counterSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
@@ -70,6 +72,36 @@ async function getNextUserId() {
   return counter.seq;
 }
 
+async function getNextLotteryId() {
+  const counter = await Counter.findOneAndUpdate(
+    { name: "lottery_id" },  // แก้ typo
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  return counter.seq;
+}
+
+async function getNextOrderId() {
+  const counter = await Counter.findOneAndUpdate(
+    { name: "order_id" },  // แก้ typo
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  return counter.seq;
+}
+
+
+
+
+
+// Test server
+app.get('/', (req, res) => {
+    res.send('Hello, world! Render is running!');
+});
+
+
+
+//------------------ USERS ------------------//
 
 // create user
 app.post("/create", async (req, res) => {
@@ -92,8 +124,6 @@ app.get("/users", async (req, res) => {
     try {
         // ดึงข้อมูลทั้งหมดจาก collection 'users'
         const users = await User.find({}, { _id: 0, __v: 0 }); 
-        // _id: 0 คือไม่เอา _id
-        // __v: 0 คือไม่เอา version key ของ Mongoose
 
         res.status(200).json(users);
     } catch (err) {
@@ -144,338 +174,386 @@ app.post("/users/login", async (req, res) => {
 });
 
 
+
+
+
+
+//---------------------------------------START----------------------------------------------------------
+
 // เอาเลขล็อตโตทั้งหมดมาแสดง
-app.get("/lottery", (req, res) => {
-    // console.log("Body:", req.body);
+app.get("/lottery", async (req, res) => {
     try {
-        connection.query("SELECT * FROM lottery", (err, results, fields) => {
-            if (err) {
-                console.log(err);
-                return res.status(400).send();
-            }
-            res.status(200).json(results)
-        })
-    } catch(err) {
-        console.log(err);
-        return res.status(500).send();
+        const lotteries = await Lottery.find(); // ดึงข้อมูลทั้งหมดจาก collection lottery
+        res.status(200).json(lotteries);
+    } catch (err) {
+        console.error("Error while fetching lottery:", err);
+        res.status(500).send("Server error");
     }
-})
+});
+
 
 //กดเลือกซื้อ
-app.post("/addOrder", (req, res) => {
-    console.log("Body:", req.body);
+app.post("/addOrder", async (req, res) => {
+  console.log("Body:", req.body);
 
-    const {user_id, lotto_id, status} = req.body;
+  const { user_id, lotto_id, status } = req.body;
 
-    try {
-        connection.query(
-            "INSERT INTO orders(user_id, lotto_id, status) VALUES(?,?,?)",
-            [user_id, lotto_id, status],
-            (err, results, fields) => {
-                if (err) {
-                    console.log("Error while inserting a order into the database", err);
-                    return res.status(400).send();
-                }
-                return res.status(201).json({ message: "New order successfully created!"});
-            }
-        )
-    } catch (err) {
-        console.log(err);
-        return res.status(500).send();
-    }
-})
+  try {
+
+    const orderId = await getNextOrderId();
+
+    const newOrder = new Order({
+      order_id: orderId,
+      user_id: user_id,  
+      lotto_id: lotto_id, 
+      status: status
+    });
+
+    await newOrder.save();
+
+    return res.status(201).json({ message: "New order successfully created!" });
+  } catch (err) {
+    console.error("Error while inserting a order into the database", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+
 
 
 // ซื้อแล้วจะอัปเดต ststus
-app.put("/updateStatus", (req, res) => {
-    console.log("Body: ", req.body);
+app.put("/updateStatus", async (req, res) => {
+  console.log("Body:", req.body);
 
-    const {lotto_id, status} = req.body;
+  const { lotto_id, status } = req.body;
+
+  try {
+    const result = await Lottery.updateOne(
+      { lotto_id: lotto_id },   
+      { $set: { status: status } } 
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "Lottery not found" });
+    }
+
+    return res.status(200).json({ message: "Update status successfully!" });
+  } catch (error) {
+    console.error("Error while updating lottery status:", error);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+
+// --- Route สำหรับอัปเดต wallet ---
+app.put("/updatewallet", async (req, res) => {
+    console.log(req.body);
+
+    const { user_id, wallet } = req.body;
 
     try {
-        connection.query(
-            "UPDATE lottery SET status = ? WHERE lotto_id = ?",
-            [ status, lotto_id],
-            (err, results, fields) => {
-                if (err) {
-                    console.log("Error while inserting a update status into the database", err);
-                    return res.status(400).send();
-                }
-                return res.status(201).json({ message: "Update status successfully !"});
-            }
-        )
+        const result = await User.updateOne(
+            { user_id: user_id },        // เงื่อนไขค้นหา
+            { $set: { wallet: wallet } } // ค่าใหม่
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        return res.status(201).json({ message: "Update wallet successfully !" });
     } catch (error) {
-        console.log(error);
+        console.error("Error while updating wallet:", error);
         return res.status(500).send();
     }
-})
+});
 
-//ซื้อเสร็จก็อัปเดตเงินที่เหลือ
-app.put("/updatewallet",(req,res) => {
-    console.log(res.body)
 
-    const {user_id, wallet} = req.body;
-
-    try {
-        connection.query(
-            "UPDATE users SET wallet = ? WHERE user_id = ?",
-            [ wallet, user_id ],
-            (err, results, fields) => {
-                if (err) {
-                    console.log("Error while inserting a update wallet into the database", err);
-                    return res.status(400).send();
-                }
-                return res.status(201).json({ message: "Update wallet successfully !"});
-            }
-        )
-    } catch (error) {
-        console.log(error);
-        return res.status(500).send();
-    }
-})
 
 //เรียกเอาล็อตโตทั้งหมดจาก user_id
-app.get("/mylotto/:id",(req,res) =>{
-    console.log("Body: ",req.body);
-    
-    const user_id = req.params.id;
+app.get("/mylotto/:id", async (req, res) => {
+    console.log("Body: ", req.body);
+
+    const user_id = Number(req.params.id);
+
     try {
-            connection.query(
-                "SELECT lottery.* ,orders.*,RIGHT(lottery.number,3) AS last_three_digits FROM orders INNER JOIN lottery ON orders.lotto_id = lottery.lotto_id WHERE  user_id = ? AND orders.status != 3 ",
-                [user_id],
-                     (err, results, fields) => {
-                if (err) {
-                    console.log("Error while show Mylottery  into the database", err);
-                    return res.status(400).send();
+        const results = await Order.aggregate([
+            {
+                $match: {
+                    user_id: user_id,
+                    status: { $ne: 3 }
                 }
-                res.status(200).json(results)
+            },
+            {
+                $lookup: {
+                    from: "lotteries",        // ชื่อ collection ของ Lottery
+                    localField: "lotto_id",
+                    foreignField: "lotto_id",
+                    as: "lottery_data"
+                }
+            },
+            { $unwind: "$lottery_data" },
+            {
+                $addFields: {
+                    last_three_digits: { $substr: ["$lottery_data.number", -3, 3] }
+                }
             }
-            )
-        
+        ]);
+
+        res.status(200).json(results);
     } catch (error) {
-        console.log(error)
+        console.log(error);
         return res.status(500).send();
-        
     }
-})
+});
+
+
+
 
 //เรียกข้อมูลทั้งหมดของ user_id
-app.get("/profile/:id",(req,res) =>{
-    console.log("Body: ",req.body);
+app.get("/profile/:id", async (req, res) => {
+  const user_id = req.params.id;
 
-    const user_id = req.params.id;
-    try {
-         connection.query(//ส่ง
-            "SELECT * FROM users WHERE user_id = ? ",
-            [user_id],
-              (err, results, fields) => {
-                if (err) {
-                    console.log("Error while show profile  into the database", err);
-                    return res.status(400).send();
-                }
-                res.status(200).json(results)
-            }
-         )
-        
-    } catch (error) {
-        console.log(error)
-        return res.status(500).send();
-        
+  try {
+    const user = await User.findOne({ user_id: Number(user_id) }).lean();
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
-}) 
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.error("Error while fetching profile:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 // เรียกรางวัลทั้งหมดที่สุ่มได้ เอามาตัดเหลือ 3 ตัว (NumberReward)
-app.get("/myreward", (req,res) => {
-    console.log ("Body:",req.body);
+app.get("/myreward", async (req, res) => {
+  try {
+    const results = await Order.aggregate([
+      { $match: { status: 1 } },
 
-    // const user_id = req.params.id;
-    try{
-        connection.query(
-            "SELECT  orders.*,reward.*,RIGHT(number_reward,3) AS last_three_digits,RIGHT(number_reward,2) AS last_two_digits  From  orders INNER JOIN reward ON orders.lotto_id = reward.lotto_id  WHERE orders.status = 1 AND reward.no IN (1,2,3,5)",
-                    (err,results,fields) => {
-             if (err) {
-                console.log("Error while Get MyReward On MyLotto Page",err)
-                return res.status(400).send();
-             }
-             res.status(200).json(results)
-                    }
-        )
+      {
+        $lookup: {
+          from: "rewards",          
+          localField: "lotto_id",   
+          foreignField: "lotto_id", 
+          as: "reward_data"
+        }
+      },
+      { $unwind: "$reward_data" }, // ทำให้ join เป็น object เดียว
 
-    }catch (error) {
-        console.log(error)
-        return res.status(500).send();
+      { $match: { "reward_data.no": { $in: [1, 2, 3] } } },
 
-    };
+      // สร้าง last_three_digits, last_two_digits
+      {
+        $addFields: {
+          last_three_digits: { $substr: ["$reward_data.number_reward", -3, 3] },
+        }
+      }
+    ]);
 
-    
-           
-})
+    res.status(200).json(results);
+  } catch (error) {
+    console.error("Error while getting MyReward:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
+
+//////////////////////////////////////////////////////////////////////
 
 //เอาไว้ดึงค่ารางวัลที่ user_id คนนั้นถูก  (myreward_get_res)
-app.get("/getMyreward/:user_id", (req, res) => {
+
+
+app.get("/getMyreward/:user_id", async (req, res) => {
     const userId = req.params.user_id;
 
     try {
-        connection.query(
-            `SELECT orders.*, reward.*, RIGHT(reward.number_reward,3) AS lastThree
-             FROM orders 
-             INNER JOIN reward ON orders.no = reward.no
-             WHERE orders.status = 2 AND orders.user_id = ?
-             `,
-            [userId],
-
-            
-            (err, results) => {
-                if (err) {
-                    console.log("Error while fetching rewards:", err);
-                    return res.status(400).send();
+        const results = await Order.aggregate([
+            {
+                $match: { user_id: userId, status: 2 }
+            },
+            {
+                $lookup: {
+                    from: "rewards",        // ต้องตรงกับชื่อ collection ใน MongoDB (เป็นพหูพจน์)
+                    localField: "no",
+                    foreignField: "no",
+                    as: "rewardData"
                 }
-
-                // แปลงข้อมูลเพื่อเพิ่มชื่อรางวัล (ไม่แก้ DB)
-                const formatted = results.map(r => ({
-                    order_id: r.order_id,
-                    user_id: r.user_id,
-                    lotto_id: r.lotto_id,
-                    status: r.status,
-                    no: r.no,
-                    number_reward: r.number_reward,
-                    price_reward: r.price_reward,
-                    // prize_type: r.no === 1 ? "รางวัลที่ 1" : "เลขท้ายสองตัว",
-                }));
-
-                res.status(200).json(formatted);
+            },
+            { $unwind: "$rewardData" },
+            {
+                $addFields: {
+                    lastThree: { $substr: ["$rewardData.number_reward", -3, 3] }
+                }
+            },
+            {
+                $project: {
+                    order_id: 1,
+                    user_id: 1,
+                    lotto_id: 1,
+                    status: 1,
+                    no: 1,
+                    number_reward: "$rewardData.number_reward",
+                    price_reward: "$rewardData.price_reward",
+                    lastThree: 1
+                }
             }
-        );
+        ]);
+
+        res.status(200).json(results);
     } catch (error) {
-        console.log(error);
+        console.error("Error while fetching rewards:", error);
         return res.status(500).send();
     }
 });
+
+
 
 // SELECT เอาเลขท้ายสองตัวมาจาก ordersทั้งหมด
-app.get("/LastTwoDigitOrder/:id", (req,res) => {
-        console.log("Body:",req.body);
-        const user_id = req.params.id;
+
+app.get("/LastTwoDigitOrder/:id", async (req, res) => {
+    const user_id = Number(req.params.id);
+
     try {
-        connection.query(
-            `SELECT RIGHT(number,2) AS last_two_digits,o.order_id,o.lotto_id 
-             FROM orders o JOIN lottery l ON o.lotto_id = l.lotto_id 
-             WHERE o.status = 1 AND o.user_id = ?`,
-            [user_id],
-            (err,results,fields) => {
+        const results = await Order.aggregate([
+            {
+                $match: { user_id: user_id, status: 1 }
+            },
+            {
+                $lookup: {
+                    from: "lotteries",        // ต้องตรงกับชื่อ collection
+                    localField: "lotto_id",
+                    foreignField: "lotto_id",
+                    as: "lotteryData"
+                }
+            },
+            { $unwind: "$lotteryData" },
+            {
+                $addFields: {
+                    last_two_digits: { $substr: ["$lotteryData.number", -2, 2] }
+                }
+            },
+            {
+                $project: {
+                    order_id: 1,
+                    lotto_id: 1,
+                    last_two_digits: 1
+                }
+            }
+        ]);
 
-        if (err) {
-            console.log("Error while Get DigitOrder on Database!");
-            return res.status(400).send();
-        }
-        res.status(200).json(results)
-    }
-        )
+        res.status(200).json(results);
     } catch (error) {
-        console.log(error)
+        console.error("Error while Get DigitOrder:", error);
         return res.status(500).send();
-    };
-
+    }
 });
 
+
 // SELECT เอาเลขสองตัวท้ายของ no = 5 จาก reward
-app.get("/getLastTwoDigit", (req,res) => {
-        console.log("Body:",req.body);
+app.get("/getLastTwoDigit", async (req, res) => {
+    console.log("Body:", req.body);
 
     try {
-        connection.query(
-            "SELECT RIGHT(number_reward,2) AS last_two_digits,price_reward,no  FROM reward WHERE no = 5",
-            (err,results,fields) => {
+        const results = await Reward.aggregate([
+            {
+                $match: { no: 5 }  // กรองเฉพาะ no = 5
+            },
+            {
+                $addFields: {
+                    last_two_digits: { $substr: ["$number_reward", -2, 2] }
+                }
+            },
+            {
+                $project: {
+                    last_two_digits: 1,
+                    price_reward: 1,
+                    no: 1
+                }
+            }
+        ]);
 
-        if (err) {
-            console.log("Error while Get Last Two digit on Database!");
-            return res.status(400).send();
-        }
-        res.status(200).json(results)
-    }
-        )
+        res.status(200).json(results);
     } catch (error) {
-        console.log(error)
+        console.error("Error while Get Last Two digit on MongoDB!", error);
         return res.status(500).send();
-    };
-
+    }
 });
 
 
 //ถ้ารางวัลตรงกันจะมีการอัปเดต ststus = 2
-app.put("/updateMylotto", (req,res) => {
-    console.log ("Body updateMylotto :",req.body);
-    
+app.put("/updateMylotto", async (req, res) => {
+    console.log("Body updateMylotto:", req.body);
 
-    const {order_id, status} = req.body;
+    const { order_id, status } = req.body;
     console.log("order_id:", order_id, "status:", status);
 
     try {
-         connection.query(
-        "UPDATE orders SET status = ? WHERE order_id = ?",
-        [ status,order_id],
-        (err, results,fields) => {
-            if (err) {
-                console.log("Error while update status My Lottery in the database",err);
-                return res.status(400).send();
-            }
-            return res.status(201).json ({ message: "Update status successfully !"});
-        }
-    )
-        
-    } catch (error) {
-        console.log(error);
-        return res.status(500).status();
-    }
-   
+        const result = await Order.updateOne(
+            { order_id: order_id },     // เงื่อนไขค้นหา
+            { $set: { status: status } } // ค่าใหม่
+        );
 
-})
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ message: "Order not found" });
+        }
+
+        return res.status(201).json({ message: "Update status successfully !" });
+    } catch (error) {
+        console.error("Error while updating status My Lottery in MongoDB:", error);
+        return res.status(500).send();
+    }
+});
+
+
+////////////////////////////////////////////////////////////////////////////////////
 
 //ถ้ารางวัลตรงกันจะมีการอัปเดต no ให้ตรงกับรางวัลที่ได้
-app.put("/updateOrder",(req,res) => {
-    console.log("Body: ",req.body);
-    const {lotto_id,no} = req.body;
-    try{
-    connection.query(
-        "UPDATE orders SET no = ? WHERE lotto_id = ?",
-        [no,lotto_id],
-        (err,results,fields) => {
-            if(err){
-                console.log("Error while inserting a update no into the database",err);
-                return res.status(400).send();
-            }
-            return res.status(201).json({message: "Update no successfully !"});
-        }
-    )
-} catch(error){
-    console.log(error);
-    return res.status(500).send();
-}
-})
+app.put("/updateOrder", async (req, res) => {
+    console.log("Body: ", req.body);
+    const { lotto_id, no } = req.body;
+
+    try {
+        const result = await Order.updateMany(
+            { lotto_id: lotto_id }, // เงื่อนไขเหมือน WHERE lotto_id = ?
+            { $set: { no: no } }    // อัปเดตค่า no
+        );
+
+        res.status(201).json({ 
+            message: "Update no successfully!",
+            modifiedCount: result.modifiedCount // จำนวนเอกสารที่ถูกอัปเดต
+        });
+    } catch (error) {
+        console.log("Error while updating order no:", error);
+        res.status(500).send({ error: "Server error" });
+    }
+});
+
 
 
 //อัปเดต status ที่ขึ้นเงินแล้ว
-app.put("/updateGetMoney",(req,res) => {
-    console.log("Body: ",req.body);
-    const {lotto_id,status} = req.body;
-    try{
-    connection.query(
-        "UPDATE orders SET status = ? WHERE lotto_id = ? AND status = 2",
-        [status,lotto_id],
-        (err,results,fields) => {
-            if(err){
-                console.log("Error while inserting a update status in orders on the database",err);
-                return res.status(400).send();
-            }
-            return res.status(201).json({message: "Update no successfully !"});
-        }
-    )
-} catch(error){
-    console.log(error);
-    return res.status(500).send();
-}
-})
+app.put("/updateGetMoney", async (req, res) => {
+    console.log("Body: ", req.body);
+    const { lotto_id, status } = req.body;
+
+    try {
+        const result = await Order.updateMany(
+            { lotto_id: lotto_id, status: 2 },
+            { $set: { status: status } }
+        );
+
+        res.status(201).json({ message: "Update status successfully!", modifiedCount: result.modifiedCount });
+    } catch (error) {
+        console.log("Error while updating orders:", error);
+        res.status(500).send({ error: "Server error" });
+    }
+});
+
 
 
 
@@ -483,165 +561,141 @@ app.put("/updateGetMoney",(req,res) => {
 
 
 //ดึงข้อมูลรางวัลทั้งหมด
-app.get("/reward", (req, res) => {
+app.get("/reward", async (req, res) => {
     console.log("Body:", req.body);
+
     try {
-        connection.query("SELECT * FROM reward", (err, results, fields) => {
-            if (err) {
-                console.log(err);
-                return res.status(400).send();
-            }
-            res.status(200).json(results)
-        })
-    } catch(err) {
-        console.log(err);
-        return res.status(500).send();
+        const rewards = await Reward.find(); // ดึงข้อมูล reward ทั้งหมด
+        res.status(200).json(rewards);
+    } catch (err) {
+        console.log("Error fetching rewards:", err);
+        res.status(500).send({ error: "Server error" });
     }
-})
+});
+
 
 // แรนด้อมล็อตโตจาก lottery ทั้งหมด
-app.get("/randomReward", (req, res) => {
-    console.log("Body: ",req.body);
+app.get("/randomReward", async (req, res) => {
+  console.log("Body:", req.body);
 
-    try {
-        connection.query("SELECT * FROM lottery ORDER BY RAND() LIMIT 1;", (err, results, fields) => {
-            if (err) {
-                console.log(err);
-                return res.status(400).send();
-            }
-            res.status(200).json(results)
-        })
-    } catch(err) {
-        console.log(err);
-        return res.status(500).send();
-    }
-})
+  try {
+    // ใช้ aggregation กับ $sample เพื่อสุ่ม 1 document
+    const results = await Lottery.aggregate([{ $sample: { size: 1 } }]);
+
+    res.status(200).json(results);
+  } catch (err) {
+    console.error("Error while fetching random lottery:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 //เพิ่มข้อมูลลงใน reward
-app.post("/addReward", async  (req, res) => {
-    console.log(" POST /addReward called");
+app.post("/addReward", async (req, res) => {
+    console.log("POST /addReward called");
     console.log("Body:", req.body);
 
-    const { no, lotto_id, number_reward, price_reward } = req.body; //ดึงค่า
-
+    const { no, lotto_id, number_reward, price_reward } = req.body;
 
     try {
-        connection.query(
-            "INSERT INTO reward(no, lotto_id, number_reward, price_reward) VALUES(?, ?, ?, ?)",
-            [no, lotto_id, number_reward, price_reward ],
-            (err, results, fields) => {
-                if (err) {
-                    console.log("Error while inserting a add reward into the database", err);
-                    return res.status(400).send();
-                }
-                return res.status(201).json({ message: "Add Reward successfully!"});
-            }
-        )
-    } catch(err) {
-        console.log(err);
-        return res.status(500).send();
-    }
-})
+        const reward = new Reward({
+            no,
+            lotto_id,
+            number_reward,
+            price_reward
+        });
 
-//จำลองข้อมูล
-app.post("/randomLotto", (req, res) => {
-    console.log(" POST /create called");
+        await reward.save(); // บันทึกลง MongoDB
+
+        res.status(201).json({ message: "Add Reward successfully!" });
+    } catch (err) {
+        console.error("Error while adding reward:", err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+
+//จำลองข้อมูล  (เปลี่ยนแล้ว)
+app.post("/randomLotto", async (req, res) => {
+    console.log("POST /randomLotto called");
     console.log("Body:", req.body);
 
     const { uniqueNumbers, price } = req.body;
-    try {
-        let insertedCount = 0;
-
-        uniqueNumbers.forEach(num => {
-            connection.query(
-                "INSERT INTO lottery(number, price) VALUES(?, ?)",
-                [num, price],
-                (err, results, fields) => {
-                    if (err) {
-                        console.log("Error while inserting a number:", err);
-                        return res.status(400).send();
-                    }
-
-                    insertedCount++;
-
-                    // ถ้า insert ครบทุกเลขแล้วส่ง response
-                    if (insertedCount === uniqueNumbers.length) {
-                        return res.status(201).json({ message: "Random Lotto numbers successfully inserted!" });
-                    }
-                }
-            );
-        });
-    }  catch(err) {
-        console.log(err);
-        return res.status(500).send();
-    }
-})
-
-
-app.get("/getLastThreeDigit", (req,res) => {
-    console.log("Body:",req.body);
 
     try {
-        connection.query(
-            "SELECT  RIGHT(number_reward,3) AS last_three_digits, lotto_id FROM reward WHERE no = 1",
-            (err,results,fields) => {
-            if (err) {
-                console.log("Error while Get Last 3 digit on Database !",err.sqlMessage)
-                return res.status(400).send(err.sqlMessage);
-            }
-            res.status(200).json(results)
-            }
-        )
-    } catch (error) {
-        console.log(error)
-        return res.status(500).send();
+        const lottoDocs = [];
+
+        for (const num of uniqueNumbers) {
+            const nextId = await getNextLotteryId();
+            lottoDocs.push({
+                lotto_id: nextId,
+                number: num,
+                price: price
+            });
+        }
+
+        await Lottery.insertMany(lottoDocs);
+
+        res.status(201).json({ message: "Random Lotto numbers successfully inserted!" });
+    } catch (err) {
+        console.error("Error while inserting lottery numbers:", err);
+        res.status(500).json({ error: "Server error" });
     }
-    
-})
+});
+
+
+
+
+app.get("/getLastThreeDigit", async (req, res) => {
+  try {
+    const results = await Reward.aggregate([
+      { $match: { no: 1 } }, // เงื่อนไข no = 1
+      {
+        $addFields: {
+          last_three_digits: { $substr: ["$number_reward", -3, 3] } // เอา 3 ตัวท้าย
+        }
+      },
+      { $project: { lotto_id: 1, last_three_digits: 1 } } // เลือก field ที่ต้องการ
+    ]);
+
+    res.status(200).json(results);
+  } catch (error) {
+    console.error("Error while getting last 3 digits:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 
 
 
 
-
-
-
-
-app.get("/orders", (req, res) => {
-    // console.log("Body:", req.body);
-    try {
-        connection.query("SELECT * FROM orders", (err, results, fields) => {
-            if (err) {
-                console.log(err);
-                return res.status(400).send();
-            }
-            res.status(200).json(results)
-        })
-    } catch(err) {
-        console.log(err);
-        return res.status(500).send();
-    }
-})
+app.get("/orders", async (req, res) => {
+  try {
+    const orders = await Order.find({});
+    res.status(200).json(orders);
+  } catch (error) {
+    console.error("Error while fetching orders:", error);
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
+});
 
 
 
 
 //รีเซ็ต
-app.delete("/delete", (req, res) => {
-  connection.query("TRUNCATE TABLE lottery", (err) => {
-    if (err) return res.status(500).send({ error: "Lottery truncate failed" });
+app.delete("/delete", async (req, res) => {
+  try {
+    await Lottery.deleteMany({});
+    await Reward.deleteMany({});
+    await Order.deleteMany({});
 
-    connection.query("TRUNCATE TABLE reward", (err) => {
-      if (err) return res.status(500).send({ error: "Reward truncate failed" });
-
-      connection.query("TRUNCATE TABLE orders", (err) => {
-        if (err) return res.status(500).send({ error: "Orders truncate failed" });
-
-        res.send({ message: "Deleted all tables successfully!" });
-      });
-    });
-  });
+    res.status(200).json({ message: "Deleted all collections successfully!" });
+  } catch (error) {
+    console.error("Error while deleting collections:", error);
+    res.status(500).json({ error: "Failed to delete collections" });
+  }
 });
+
 
 
 // START SERVER

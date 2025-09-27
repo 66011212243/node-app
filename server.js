@@ -287,7 +287,7 @@ app.get("/mylotto/:id", async (req, res) => {
             },
             {
                 $lookup: {
-                    from: "lotteries",        
+                    from: "lotteries",
                     localField: "lotto_id",
                     foreignField: "lotto_id",
                     as: "lottery_data"
@@ -310,19 +310,28 @@ app.get("/mylotto/:id", async (req, res) => {
                         ]
                     }
                 }
+            },
+            // project ให้ตรงกับ Flutter model
+            {
+                $project: {
+                    order_id: 1,
+                    user_id: 1,
+                    lotto_id: 1,
+                    status: 1,
+                    number: "$lottery_data.number",
+                    price: "$lottery_data.price",
+                    last_three_digits: 1
+                }
             }
         ]);
 
         console.log("Results:", results);
         res.status(200).json(results);
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return res.status(500).send();
     }
 });
-
-
-
 
 
 //เรียกข้อมูลทั้งหมดของ user_id

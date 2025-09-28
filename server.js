@@ -32,10 +32,23 @@ const lotterySchema = new mongoose.Schema({
 });
 const Lottery = mongoose.model('Lottery', lotterySchema);
 
+// (async () => {
+//   try {
+//     await Order.updateMany(
+//       { no: { $exists: false } },
+//       { $set: { no: 0 } }
+//     );
+//     console.log("Update สำเร็จ: เติม no=0 ให้ document เก่าเรียบร้อยแล้ว");
+//   } catch (err) {
+//     console.error("Error:", err);
+//   }
+// })();
+
 await Order.updateMany(
   { no: { $exists: false } }, // เอกสารที่ไม่มี field 'no'
   { $set: { no: 0 } }         // ตั้งค่า no = 0
 );
+
 
 
 const orderSchema = new mongoose.Schema({

@@ -37,7 +37,7 @@ const orderSchema = new mongoose.Schema({
     user_id: { type: Number, ref: 'User' },  
     lotto_id: { type: Number, ref: 'Lottery' }, 
     status: { type: Number, default: 1 },
-    no: Number
+    no: { type: Number, default: 0 } 
 });
 const Order = mongoose.model('Order', orderSchema);
 

@@ -37,7 +37,7 @@ const orderSchema = new mongoose.Schema({
     user_id: { type: Number, ref: 'User' },  
     lotto_id: { type: Number, ref: 'Lottery' }, 
     status: { type: Number, default: 1 },
-    no: { type: Number, default: 0 }
+    no: Number
 });
 const Order = mongoose.model('Order', orderSchema);
 
@@ -206,7 +206,8 @@ app.post("/addOrder", async (req, res) => {
       order_id: orderId,
       user_id: user_id,  
       lotto_id: lotto_id, 
-      status: status
+      status: status,
+      no: 0
     });
 
     await newOrder.save();

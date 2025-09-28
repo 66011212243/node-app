@@ -390,19 +390,7 @@ app.get("/myreward", async (req, res) => {
               "$reward_data.number_reward"
             ]
           },
-          last_two_digits: {
-            $cond: [
-              { $gte: [{ $strLenCP: "$reward_data.number_reward" }, 2] },
-              {
-                $substrCP: [
-                  "$reward_data.number_reward",
-                  { $subtract: [{ $strLenCP: "$reward_data.number_reward" }, 2] },
-                  2
-                ]
-              },
-              "$reward_data.number_reward"
-            ]
-          }
+          
         }
       },
       // Project fields ให้ตรงกับ Flutter model NumberReward
@@ -416,7 +404,6 @@ app.get("/myreward", async (req, res) => {
           numberReward: "$reward_data.number_reward",
           priceReward: "$reward_data.price_reward",
           lastThreeDigits: "$last_three_digits",
-          lastTwoDigits: "$last_two_digits"
         }
       }
     ]);

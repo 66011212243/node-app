@@ -32,6 +32,19 @@ const lotterySchema = new mongoose.Schema({
 });
 const Lottery = mongoose.model('Lottery', lotterySchema);
 
+(async () => {
+  try {
+    await Order.updateMany(
+      { no: { $exists: false } },
+      { $set: { no: 0 } }
+    );
+    console.log("Update สำเร็จ: เติม no=0 ให้ document เก่าเรียบร้อยแล้ว");
+  } catch (err) {
+    console.error("Error:", err);
+  }
+})();
+
+
 const orderSchema = new mongoose.Schema({
     order_id: { type: Number, unique: true },
     user_id: { type: Number, ref: 'User' },  

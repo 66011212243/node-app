@@ -44,10 +44,10 @@ const Lottery = mongoose.model('Lottery', lotterySchema);
 //   }
 // })();
 
-await Order.updateMany(
-  { no: { $exists: false } }, // เอกสารที่ไม่มี field 'no'
-  { $set: { no: 0 } }         // ตั้งค่า no = 0
-);
+// await Order.updateMany(
+//   { no: { $exists: false } }, // เอกสารที่ไม่มี field 'no'
+//   { $set: { no: 0 } }         // ตั้งค่า no = 0
+// );
 
 
 

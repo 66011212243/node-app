@@ -100,30 +100,13 @@ async function getNextOrderId() {
   return counter.seq;
 }
 
-
-
-
-
 // Test server
 app.get('/', (req, res) => {
     res.send('Hello, world! Render is running!');
 });
 
-// app.get("/fillNo", async (req, res) => {
-//   try {
-//     const result = await Order.updateMany(
-//       { no: { $exists: false } },
-//       { $set: { no: 0 } }
-//     );
-//     res.send(`เติม no ให้ ${result.modifiedCount} document เรียบร้อยแล้ว`);
-//   } catch (err) {
-//     res.status(500).send(err.message);
-//   }
-// });
-
 
 //------------------ USERS ------------------//
-
 // create user
 app.post("/create", async (req, res) => {
     const { email, name, password, wallet } = req.body;

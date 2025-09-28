@@ -51,6 +51,12 @@ const rewardSchema = new mongoose.Schema({
 });
 const Reward = mongoose.model('Reward', rewardSchema);
 
+await Order.updateMany(
+  { no: { $exists: false } },
+  { $set: { no: 0 } }
+);
+console.log("เติม no=0 ให้ document เก่าเรียบร้อยแล้ว");
+
 
 // const Order = require("./models/Order");
 // const Reward = require("./models/Reward");
